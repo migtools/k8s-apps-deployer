@@ -5,7 +5,7 @@ redis_version: "latest"
 storage_size: 1Gi
 storage_class: ""
 accessmode: ReadWriteOnce
-redis_image: redis:latest
+redis_image: docker.io/library/redis:latest
 
 # Set this value to true if using a non cluster admin user
 non_admin_user: false
