@@ -49,14 +49,35 @@
     pod_name: "{{ (pod.resources|first).metadata.name }}"
 
 - name: Wait until all cassandra node are ready (Status=Up and State=Normal)
-  shell: "kubectl exec {{ pod_name }} -n {{ namespace }} -c {{ app_name }} -- nodetool status"
+  kubernetes.core.k8s_exec:
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: "{{ app_name }}"
+    command: nodetool status
   register: result
-  until: result.stdout is regex('.*UN.*\n.*UN.*\n.*UN.*')
+  until: result.rc == 0 and (result.stdout | regex_findall('(?m)^UN\\s+') | length) == (number_of_replicas | int)
   retries: 30
   delay: 10
 
 - name: Populate the DB with some sample data
-  shell: "kubectl exec {{ pod_name }} -n {{ namespace }} -c {{ app_name }} -- cqlsh -e \"CREATE KEYSPACE classicmodels WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 3 }; use classicmodels; CREATE TABLE offices (officeCode text PRIMARY KEY, city text, phone text, addressLine1 text, addressLine2 text, state text, country text, postalCode text, territory text); INSERT into offices(officeCode, city, phone, addressLine1, addressLine2, state, country ,postalCode, territory) values ('1','San Francisco','+1 650 219 4782','100 Market Street','Suite 300','CA','USA','94080','NA');\""
+  kubernetes.core.k8s_exec:
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: "{{ app_name }}"
+    command: >-
+      /bin/sh -c
+      "cqlsh -e \"CREATE KEYSPACE classicmodels WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : {{ number_of_replicas | int }} };
+      use classicmodels;
+      CREATE TABLE offices (officeCode text PRIMARY KEY, city text, phone text, addressLine1 text, addressLine2 text, state text, country text, postalCode text, territory text);
+      INSERT into offices(officeCode, city, phone, addressLine1, addressLine2, state, country ,postalCode, territory) values ('1','San Francisco','+1 650 219 4782','100 Market Street','Suite 300','CA','USA','94080','NA');\""
   register: result
   until: result.rc == 0
   retries: 5
