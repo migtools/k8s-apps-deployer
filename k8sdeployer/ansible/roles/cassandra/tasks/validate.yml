@@ -41,9 +41,17 @@
     pod_name: "{{ (pod.resources|first).metadata.name }}"
 
 - name: Wait until all cassandra node are ready (Status=Up and State=Normal)
-  shell: "kubectl exec {{ pod_name }} -n {{ namespace }} -c {{ app_name }} -- nodetool status"
+  kubernetes.core.k8s_exec:
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: "{{ app_name }}"
+    command: nodetool status
   register: result
-  until: result.stdout is regex('.*UN.*\n.*UN.*\n.*UN.*')
+  until: result.rc == 0 and (result.stdout | regex_findall('(?m)^UN\\s+') | length) == (number_of_replicas | int)
   retries: 30
   delay: 10
   ignore_errors: yes
@@ -105,15 +113,31 @@
   when: result.failed == true
 
 - name: Wait until all cassandra node are ready (Status=Up and State=Normal) after scale up
-  shell: "kubectl exec {{ pod_name }} -n {{ namespace }} -c {{ app_name }} -- nodetool status"
+  kubernetes.core.k8s_exec:
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: "{{ app_name }}"
+    command: nodetool status
   register: node_ready
-  until: node_ready.stdout is regex('.*UN.*\n.*UN.*\n.*UN.*')
+  until: node_ready.rc == 0 and (node_ready.stdout | regex_findall('(?m)^UN\\s+') | length) == (number_of_replicas | int)
   retries: 30
   delay: 10
   when: result.failed == true
 
 - name: Verify Data was populated
-  shell: "kubectl exec {{ pod_name }} -n {{ namespace }} -c {{ app_name }} -- cqlsh --no-color -e 'SELECT * FROM classicmodels.offices;'"
+  kubernetes.core.k8s_exec:
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: "{{ app_name }}"
+    command: /bin/sh -c "cqlsh --no-color -e 'SELECT * FROM classicmodels.offices;'"
   register: result
   until: result.rc == 0
   retries: 5
