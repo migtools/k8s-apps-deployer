@@ -21,6 +21,12 @@ spec:
         - name: {{ app_name }}
           image: {{ image_path }}
           imagePullPolicy: Always
+{% if is_openshift | default(false) | bool %}
+          args:
+            - cassandra
+            - -R
+            - -f
+{% endif %}
           ports:
             - containerPort: 7000
               name: intra-node
@@ -37,8 +43,10 @@ spec:
             requests:
               cpu: "500m"
               memory: 2Gi
+{% if not (is_openshift | default(false) | bool) %}
           securityContext:
             privileged: true
+{% endif %}
           lifecycle:
             preStop:
               exec:
