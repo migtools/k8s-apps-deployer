@@ -1,8 +1,9 @@
 ---
 - name: Check pods status
   k8s_info:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
     verify_ssl: "{{ verify_ssl }}"
     kind: Pod
     namespace: "{{ namespace }}"
@@ -58,8 +59,9 @@
 
 - name: Scale down the StatefulSet if node ready phase failed
   k8s:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
     verify_ssl: "{{ verify_ssl }}"
     kind: StatefulSet
     namespace: "{{ namespace }}"
@@ -70,8 +72,9 @@
 
 - name: Wait for the StatefulSet to scale down
   k8s_info:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
     verify_ssl: "{{ verify_ssl }}"
     kind: StatefulSet
     namespace: "{{ namespace }}"
@@ -84,8 +87,9 @@
 
 - name: Scale up the StatefulSet after scaling down
   k8s:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
     verify_ssl: "{{ verify_ssl }}"
     kind: StatefulSet
     namespace: "{{ namespace }}"
@@ -95,8 +99,9 @@
 
 - name: Check pods status after scale up
   k8s_info:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
+    context: "{{ context | default(omit) }}"
+    host: "{{ server if (token | default('') | string | length) > 0 else omit }}"
+    api_key: "{{ token if (token | default('') | string | length) > 0 else omit }}"
     verify_ssl: "{{ verify_ssl }}"
     kind: Pod
     namespace: "{{ namespace }}"
@@ -137,7 +142,7 @@
     namespace: "{{ namespace }}"
     pod: "{{ pod_name }}"
     container: "{{ app_name }}"
-    command: /bin/sh -c "cqlsh --no-color -e 'SELECT * FROM classicmodels.offices;'"
+    command: /bin/sh -c "HOME=/tmp cqlsh --no-color -e 'SELECT * FROM classicmodels.offices;'"
   register: result
   until: result.rc == 0
   retries: 5
