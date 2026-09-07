@@ -1,0 +1,12 @@
+---
+- name: Deploy buildconfig-test
+  when: with_deploy | default(false) | bool
+  include_tasks: deploy.yml
+
+- name: Validate buildconfig-test on source
+  when: with_validate_source | default(false) | bool
+  include_tasks: validate.yml
+
+- name: Cleanup buildconfig-test
+  when: with_cleanup | default(false) | bool
+  include_tasks: cleanup.yml
