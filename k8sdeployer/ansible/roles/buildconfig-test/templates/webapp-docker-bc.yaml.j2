@@ -1,0 +1,25 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: webapp-docker
+  namespace: {{ namespace }}
+  labels:
+    app: webapp
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/sclorg/django-ex.git
+      ref: master
+    contextDir: .
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+      buildArgs:
+        - name: PYTHON_VERSION
+          value: "3.9"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: webapp-docker:latest

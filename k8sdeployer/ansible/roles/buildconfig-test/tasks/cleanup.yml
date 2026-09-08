@@ -1,0 +1,32 @@
+---
+- name: Delete BuildConfigs
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: build.openshift.io/v1
+    kind: BuildConfig
+    name: "{{ item }}"
+    namespace: "{{ namespace }}"
+  loop:
+    - webapp-docker
+    - api-s2i
+    - docker-envvars
+  ignore_errors: yes
+
+- name: Delete ImageStreams
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: image.openshift.io/v1
+    kind: ImageStream
+    name: "{{ item }}"
+    namespace: "{{ namespace }}"
+  loop:
+    - webapp-docker
+    - api-s2i
+    - docker-envvars
+  ignore_errors: yes

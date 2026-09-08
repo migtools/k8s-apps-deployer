@@ -1,0 +1,26 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: api-s2i
+  namespace: {{ namespace }}
+  labels:
+    app: api
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/sclorg/nodejs-ex.git
+      ref: master
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: DockerImage
+        name: registry.access.redhat.com/ubi8/nodejs-16:latest
+      env:
+        - name: NPM_MIRROR
+          value: https://registry.npmjs.org
+  output:
+    to:
+      kind: ImageStreamTag
+      name: api-s2i:latest

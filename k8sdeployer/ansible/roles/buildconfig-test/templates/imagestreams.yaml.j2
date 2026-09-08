@@ -1,0 +1,27 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: webapp-docker
+  namespace: {{ namespace }}
+spec:
+  lookupPolicy:
+    local: false
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: api-s2i
+  namespace: {{ namespace }}
+spec:
+  lookupPolicy:
+    local: false
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: docker-envvars
+  namespace: {{ namespace }}
+spec:
+  lookupPolicy:
+    local: false
