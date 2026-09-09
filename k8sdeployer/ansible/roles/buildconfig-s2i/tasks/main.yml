@@ -1,9 +1,12 @@
 ---
-- import_tasks: deploy.yml
-  when: action == 'deploy'
+- name: Deploy buildconfig-s2i
+  when: with_deploy | default(false) | bool
+  include_tasks: deploy.yml
 
-- import_tasks: validate.yml
-  when: action == 'validate'
+- name: Validate buildconfig-s2i on source
+  when: with_validate_source | default(false) | bool
+  include_tasks: validate.yml
 
-- import_tasks: remove.yml
-  when: action == 'remove'
+- name: Cleanup buildconfig-s2i
+  when: with_cleanup | default(false) | bool
+  include_tasks: remove.yml
