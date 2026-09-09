@@ -1,0 +1,22 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: webapp-docker
+  namespace: {{ namespace }}
+  labels:
+    app: webapp
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/docker/welcome-to-docker.git
+      ref: main
+    contextDir: .
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: webapp-docker:latest

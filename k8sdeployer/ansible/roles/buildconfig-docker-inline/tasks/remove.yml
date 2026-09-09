@@ -1,0 +1,38 @@
+---
+- name: Delete docker-envvars BuildConfig
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: build.openshift.io/v1
+    kind: BuildConfig
+    name: docker-envvars
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
+
+- name: Delete ImageStream
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: image.openshift.io/v1
+    kind: ImageStream
+    name: docker-envvars
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
+
+- name: Delete namespace
+  k8s:
+    state: absent
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  when: non_admin_user == false
+  ignore_errors: yes

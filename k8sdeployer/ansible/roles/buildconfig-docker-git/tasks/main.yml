@@ -1,0 +1,9 @@
+---
+- import_tasks: deploy.yml
+  when: action == 'deploy'
+
+- import_tasks: validate.yml
+  when: action == 'validate'
+
+- import_tasks: remove.yml
+  when: action == 'remove'
