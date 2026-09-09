@@ -22,17 +22,3 @@
     name: api-s2i
     namespace: "{{ namespace }}"
   ignore_errors: yes
-
-- name: Delete namespace
-  k8s:
-    state: absent
-    definition:
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: "{{ namespace }}"
-    host: "{{ server }}"
-    api_key: "{{ token }}"
-    verify_ssl: "{{ verify_ssl }}"
-  when: non_admin_user == false
-  ignore_errors: yes
