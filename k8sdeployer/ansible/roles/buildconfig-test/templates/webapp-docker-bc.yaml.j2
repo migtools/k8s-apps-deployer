@@ -9,16 +9,13 @@ spec:
   source:
     type: Git
     git:
-      uri: https://github.com/sclorg/django-ex.git
+      uri: https://github.com/sclorg/httpd-ex.git
       ref: master
     contextDir: .
   strategy:
     type: Docker
     dockerStrategy:
       dockerfilePath: Dockerfile
-      buildArgs:
-        - name: PYTHON_VERSION
-          value: "3.9"
   output:
     to:
       kind: ImageStreamTag
