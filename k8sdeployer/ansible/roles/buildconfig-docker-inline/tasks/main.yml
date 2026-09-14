@@ -1,0 +1,12 @@
+---
+- name: Deploy buildconfig-docker-inline
+  when: with_deploy | default(false) | bool
+  include_tasks: deploy.yml
+
+- name: Validate buildconfig-docker-inline on source
+  when: with_validate_source | default(false) | bool
+  include_tasks: validate.yml
+
+- name: Cleanup buildconfig-docker-inline
+  when: with_cleanup | default(false) | bool
+  include_tasks: remove.yml

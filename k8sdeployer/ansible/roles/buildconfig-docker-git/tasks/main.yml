@@ -1,12 +1,12 @@
 ---
-- name: Deploy buildconfig-test
+- name: Deploy buildconfig-docker-git
   when: with_deploy | default(false) | bool
   include_tasks: deploy.yml
 
-- name: Validate buildconfig-test on source
+- name: Validate buildconfig-docker-git on source
   when: with_validate_source | default(false) | bool
   include_tasks: validate.yml
 
-- name: Cleanup buildconfig-test
+- name: Cleanup buildconfig-docker-git
   when: with_cleanup | default(false) | bool
-  include_tasks: cleanup.yml
+  include_tasks: remove.yml

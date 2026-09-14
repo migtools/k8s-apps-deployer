@@ -1,0 +1,3 @@
+---
+namespace: buildconfig-s2i
+non_admin_user: false

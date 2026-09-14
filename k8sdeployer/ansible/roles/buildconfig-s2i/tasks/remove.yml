@@ -1,0 +1,24 @@
+---
+- name: Delete api-s2i BuildConfig
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: build.openshift.io/v1
+    kind: BuildConfig
+    name: api-s2i
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
+
+- name: Delete ImageStream
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: image.openshift.io/v1
+    kind: ImageStream
+    name: api-s2i
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
