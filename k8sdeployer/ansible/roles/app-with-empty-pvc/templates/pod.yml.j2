@@ -7,11 +7,12 @@ metadata:
   namespace: {{ namespace }}
 spec:
   containers:
-  - image: quay.io/openshifttest/alpine:multiarch
+  - image: registry.access.redhat.com/ubi9/ubi-minimal:latest
     name: test-container
     command:
-    - sleep
-    - "10000"
+    - /bin/sh
+    - -c
+    - sleep 10000
     volumeMounts:
     - mountPath: /data
       name: data-volume
