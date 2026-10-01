@@ -12,33 +12,15 @@
     verify_ssl: "{{ verify_ssl }}"
   when: non_admin_user == false
 
-- name: Create ImageStreams
+- name: Create ImageStream
   k8s:
     host: "{{ server }}"
     api_key: "{{ token }}"
     verify_ssl: "{{ verify_ssl }}"
     state: present
     namespace: "{{ namespace }}"
-    definition: "{{ lookup('template', 'imagestreams.yaml.j2') | from_yaml_all | list }}"
+    definition: "{{ lookup('template', 'imagestream.yaml.j2') | from_yaml }}"
   ignore_errors: yes
-
-- name: Create webapp-docker BuildConfig
-  k8s:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
-    verify_ssl: "{{ verify_ssl }}"
-    state: present
-    namespace: "{{ namespace }}"
-    definition: "{{ lookup('template', 'webapp-docker-bc.yaml.j2') | from_yaml }}"
-
-- name: Create api-s2i BuildConfig
-  k8s:
-    host: "{{ server }}"
-    api_key: "{{ token }}"
-    verify_ssl: "{{ verify_ssl }}"
-    state: present
-    namespace: "{{ namespace }}"
-    definition: "{{ lookup('template', 'api-s2i-bc.yaml.j2') | from_yaml }}"
 
 - name: Create docker-envvars BuildConfig
   k8s:

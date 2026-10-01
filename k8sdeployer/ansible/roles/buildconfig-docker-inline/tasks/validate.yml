@@ -1,0 +1,12 @@
+---
+- name: Validate docker-envvars BuildConfig exists
+  k8s_info:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    api_version: build.openshift.io/v1
+    kind: BuildConfig
+    name: docker-envvars
+    namespace: "{{ namespace }}"
+  register: buildconfig_result
+  failed_when: buildconfig_result.resources | length == 0
