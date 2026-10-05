@@ -7,7 +7,7 @@ metadata:
   namespace: {{ namespace }}
 spec:
   containers:
-  - image: quay.io/openshifttest/alpine:multiarch
+  - image: docker.io/bitnami/redis:latest
     name: test-container
     command:
     - sleep
@@ -16,7 +16,11 @@ spec:
     - mountPath: /data
       name: data-volume
     securityContext:
+      runAsNonRoot: true
       allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
       seccompProfile:
         type: RuntimeDefault
   volumes:
