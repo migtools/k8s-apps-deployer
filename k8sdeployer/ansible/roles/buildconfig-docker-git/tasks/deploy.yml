@@ -12,6 +12,15 @@
     verify_ssl: "{{ verify_ssl }}"
   when: non_admin_user == false
 
+- name: Create builder ServiceAccount
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: present
+    namespace: "{{ namespace }}"
+    definition: "{{ lookup('template', 'builder-serviceaccount.yaml.j2') | from_yaml }}"
+
 - name: Create ImageStream
   k8s:
     host: "{{ server }}"
