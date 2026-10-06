@@ -24,7 +24,7 @@
     namespace: "{{ namespace }}"
     pod: "{{ (pod.resources | first).metadata.name }}"
     container: test-container
-    command: /bin/sh -c 'find /data -type f'
+    command: /bin/sh -c 'find /data -path /data/lost+found -prune -o -type f -print'
   register: output
 
 - debug:
