@@ -21,6 +21,24 @@
     namespace: "{{ namespace }}"
     definition: "{{ lookup('template', 'builder-serviceaccount.yaml.j2') | from_yaml }}"
 
+- name: Create builder Role
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: present
+    namespace: "{{ namespace }}"
+    definition: "{{ lookup('template', 'builder-role.yaml.j2') | from_yaml }}"
+
+- name: Create builder RoleBinding
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: present
+    namespace: "{{ namespace }}"
+    definition: "{{ lookup('template', 'builder-rolebinding.yaml.j2') | from_yaml }}"
+
 - name: Create ImageStream
   k8s:
     host: "{{ server }}"

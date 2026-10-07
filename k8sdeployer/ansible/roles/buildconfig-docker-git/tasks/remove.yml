@@ -34,3 +34,27 @@
     name: builder
     namespace: "{{ namespace }}"
   ignore_errors: yes
+
+- name: Delete builder RoleBinding
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    name: builder-rolebinding
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
+
+- name: Delete builder Role
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    state: absent
+    api_version: rbac.authorization.k8s.io/v1
+    kind: Role
+    name: builder-role
+    namespace: "{{ namespace }}"
+  ignore_errors: yes
