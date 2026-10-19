@@ -18,7 +18,7 @@ func main() {
 		image = defaultImage
 	}
 
-	kubeconfig, explicitKubeconfig := kubeconfigPath(os.Args[1:])
+	kubeconfig, _ := kubeconfigPath(os.Args[1:])
 	token := os.Getenv("K8S_TOKEN")
 	server := os.Getenv("K8S_SERVER")
 	if token == "" {
@@ -29,28 +29,30 @@ func main() {
 	}
 
 	useTokenAuth := token != "" && server != ""
-	mountKubeconfig := kubeconfig != "" && (!useTokenAuth || explicitKubeconfig)
-	if mountKubeconfig {
-		if _, err := os.Stat(kubeconfig); err != nil {
-			fmt.Fprintf(os.Stderr, "stat kubeconfig %q: %v\n", kubeconfig, err)
-			os.Exit(1)
-		}
-	}
-	if !useTokenAuth && !mountKubeconfig {
+	mountKubeconfig := kubeconfig != "" || useTokenAuth
+	if !mountKubeconfig {
 		fmt.Fprintln(os.Stderr, "kubeconfig is required unless both K8S_TOKEN and K8S_SERVER or --token and --server are provided")
 		os.Exit(1)
 	}
 
 	containerArgs := replaceKubeconfigArg(os.Args[1:])
-	var flattenedKubeconfig string
-	if mountKubeconfig {
+	var mountedKubeconfig string
+	if useTokenAuth {
 		var err error
-		flattenedKubeconfig, err = flattenKubeconfig(kubeconfig)
+		mountedKubeconfig, err = createTokenKubeconfig(server, token, hasOption(os.Args[1:], "--insecure-skip-tls-verify"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "create token kubeconfig: %v\n", err)
+			os.Exit(1)
+		}
+		defer os.Remove(mountedKubeconfig)
+	} else {
+		var err error
+		mountedKubeconfig, err = flattenKubeconfig(kubeconfig)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "flatten kubeconfig %q: %v\n", kubeconfig, err)
 			os.Exit(1)
 		}
-		defer os.Remove(flattenedKubeconfig)
+		defer os.Remove(mountedKubeconfig)
 	}
 
 	args := []string{
@@ -58,7 +60,7 @@ func main() {
 	}
 	if mountKubeconfig {
 		args = append(args,
-			"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", flattenedKubeconfig, containerKubeconfig),
+			"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", mountedKubeconfig, containerKubeconfig),
 			"--env", "KUBECONFIG="+containerKubeconfig,
 		)
 	}
@@ -105,6 +107,15 @@ func optionValue(args []string, option string) string {
 	return value
 }
 
+func hasOption(args []string, option string) bool {
+	for _, arg := range args {
+		if arg == option {
+			return true
+		}
+	}
+	return false
+}
+
 func optionValueWithPresence(args []string, option string) (string, bool) {
 	prefix := option + "="
 	for index, arg := range args {
@@ -133,7 +144,18 @@ func replaceKubeconfigArg(args []string) []string {
 }
 
 func flattenKubeconfig(kubeconfig string) (string, error) {
-	command := exec.Command("kubectl", "config", "view", "--raw", "--flatten", "--kubeconfig", kubeconfig)
+	paths := filepath.SplitList(kubeconfig)
+	if len(paths) == 0 {
+		return "", fmt.Errorf("kubeconfig path is empty")
+	}
+	for _, path := range paths {
+		if _, err := os.Stat(path); err != nil {
+			return "", fmt.Errorf("stat kubeconfig %q: %w", path, err)
+		}
+	}
+
+	command := exec.Command("kubectl", "config", "view", "--raw", "--flatten")
+	command.Env = append(os.Environ(), "KUBECONFIG="+strings.Join(paths, string(os.PathListSeparator)))
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()
@@ -159,4 +181,45 @@ func flattenKubeconfig(kubeconfig string) (string, error) {
 		return "", fmt.Errorf("close temporary kubeconfig: %w", err)
 	}
 	return temporaryPath, nil
+}
+
+func createTokenKubeconfig(server, token string, insecureSkipTLSVerify bool) (string, error) {
+	temporaryFile, err := os.CreateTemp("", "k8sdeploy-token-kubeconfig-*.yaml")
+	if err != nil {
+		return "", fmt.Errorf("create temporary kubeconfig: %w", err)
+	}
+	temporaryPath := temporaryFile.Name()
+	if err := temporaryFile.Close(); err != nil {
+		os.Remove(temporaryPath)
+		return "", fmt.Errorf("close temporary kubeconfig: %w", err)
+	}
+	os.Remove(temporaryPath)
+
+	clusterArgs := []string{
+		"config", "set-cluster", "k8sdeploy",
+		"--server=" + server,
+		"--kubeconfig", temporaryPath,
+	}
+	if insecureSkipTLSVerify {
+		clusterArgs = append(clusterArgs, "--insecure-skip-tls-verify=true")
+	}
+	commands := [][]string{
+		clusterArgs,
+		{"config", "set-credentials", "k8sdeploy", "--token=" + token, "--kubeconfig", temporaryPath},
+		{"config", "set-context", "k8sdeploy", "--cluster=k8sdeploy", "--user=k8sdeploy", "--kubeconfig", temporaryPath},
+		{"config", "use-context", "k8sdeploy", "--kubeconfig", temporaryPath},
+	}
+	for _, args := range commands {
+		if output, err := runKubectl(args...); err != nil {
+			os.Remove(temporaryPath)
+			return "", fmt.Errorf("kubectl %s: %w: %s", args[1], err, strings.TrimSpace(output))
+		}
+	}
+	return temporaryPath, nil
+}
+
+func runKubectl(args ...string) (string, error) {
+	command := exec.Command("kubectl", args...)
+	output, err := command.CombinedOutput()
+	return string(output), err
 }

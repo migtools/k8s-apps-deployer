@@ -1,7 +1,9 @@
 package main
 
 import (
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,16 @@ func TestReplaceKubeconfigArg(t *testing.T) {
 				t.Fatalf("replaceKubeconfigArg() = %#v, want %#v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestKubeconfigPathList(t *testing.T) {
+	first := filepath.Join(t.TempDir(), "source-config")
+	second := filepath.Join(t.TempDir(), "target-config")
+	value := strings.Join([]string{first, second}, string(filepath.ListSeparator))
+
+	paths := filepath.SplitList(value)
+	if !reflect.DeepEqual(paths, []string{first, second}) {
+		t.Fatalf("filepath.SplitList() = %#v, want %#v", paths, []string{first, second})
 	}
 }
