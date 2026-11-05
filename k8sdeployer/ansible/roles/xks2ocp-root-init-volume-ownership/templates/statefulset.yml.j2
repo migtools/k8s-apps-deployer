@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+spec:
+  serviceName: {{ app_name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+    spec:
+      serviceAccountName: {{ service_account_name }}
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: repair-volume-ownership
+          image: {{ ownership_repair_image }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              mkdir -p /var/lib/pgsql/data
+              chown -R 26:0 /var/lib/pgsql/data
+              chmod -R g=u /var/lib/pgsql/data
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+      containers:
+        - name: postgresql
+          image: {{ postgres_image }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: database
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: username
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: password
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U "$POSTGRESQL_USER" -d "$POSTGRESQL_DATABASE"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: {{ app_name }}
+      spec:
+        accessModes:
+          - {{ access_mode }}
+{% if storage_class | length > 0 %}
+        storageClassName: {{ storage_class }}
+{% endif %}
+        resources:
+          requests:
+            storage: {{ storage_size }}
