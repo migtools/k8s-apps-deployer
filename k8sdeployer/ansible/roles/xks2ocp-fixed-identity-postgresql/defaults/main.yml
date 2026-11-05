@@ -1,0 +1,13 @@
+---
+app_name: xks2ocp-fixed-identity-postgresql
+database_name: orders
+database_user: orders
+database_password: orders-test-password
+postgres_image: quay.io/sclorg/postgresql-16-c9s:20261104
+storage_size: 2Gi
+storage_class: ""
+access_mode: ReadWriteOnce
+non_admin_user: false
+with_cleanup: false
+with_deploy: false
+with_validate: false
