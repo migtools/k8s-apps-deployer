@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+    spec:
+      serviceAccountName: {{ service_account_name }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 27
+        runAsGroup: 27
+        fsGroup: 27
+        supplementalGroups:
+          - 27
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: verify-fixed-identity
+          image: {{ mysql_image }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              actual_uid="$(id -u)"
+              actual_gid="$(id -g)"
+              if [ "$actual_uid" != "27" ] || [ "$actual_gid" != "27" ]; then
+                echo "fixed-identity database requires UID/GID 27; got ${actual_uid}:${actual_gid}" >&2
+                exit 1
+              fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: mysql
+          image: {{ mysql_image }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: database
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ app_name }}
+                  key: root-password
+          securityContext:
+            runAsUser: 27
+            runAsGroup: 27
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - mysqladmin ping -uroot -p"$MYSQL_ROOT_PASSWORD"
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ app_name }}-data
