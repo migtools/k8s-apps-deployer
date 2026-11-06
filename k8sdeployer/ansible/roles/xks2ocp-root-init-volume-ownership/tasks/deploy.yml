@@ -1,0 +1,81 @@
+---
+- name: Ensure namespace exists
+  k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  when: not non_admin_user | bool
+- name: Create application service account
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'serviceaccount.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+- name: Create PostgreSQL secret
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'secret.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+- name: Create PostgreSQL service
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'service.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+- name: Create PostgreSQL StatefulSet
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'statefulset.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+- name: Wait for PostgreSQL pod to be ready
+  k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app={{ app_name }}
+    field_selectors:
+      - status.phase=Running
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: pod
+  until: >-
+    pod.resources | length == 1 and
+    pod.resources[0].status.containerStatuses[0].ready | default(false)
+  retries: 30
+  delay: 10
+- name: Get PostgreSQL pod name
+  set_fact:
+    pod_name: "{{ (pod.resources | first).metadata.name }}"
+- name: Seed orders data
+  kubernetes.core.k8s_exec:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ pod_name }}"
+    container: postgresql
+    command: >-
+      /bin/sh -ec "psql -v ON_ERROR_STOP=1 -U \"$POSTGRESQL_USER\" -d \"$POSTGRESQL_DATABASE\"
+      -c \"CREATE TABLE IF NOT EXISTS orders (order_id text PRIMARY KEY, customer text NOT NULL,
+      amount_cents integer NOT NULL, status text NOT NULL); INSERT INTO orders (order_id, customer,
+      amount_cents, status) VALUES ('order-1001', 'customer-a', 1299, 'pending'), ('order-1002',
+      'customer-b', 4599, 'paid'), ('order-1003', 'customer-a', 799, 'shipped') ON CONFLICT
+      (order_id) DO UPDATE SET customer = EXCLUDED.customer, amount_cents = EXCLUDED.amount_cents,
+      status = EXCLUDED.status;\""
+  register: seed_result
+  retries: 5
+  until: seed_result.rc == 0
+  delay: 5
