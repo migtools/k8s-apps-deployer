@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ app_name }}-data
+  namespace: {{ namespace }}
+spec:
+  accessModes:
+    - {{ access_mode }}
+{% if storage_class | length > 0 %}
+  storageClassName: {{ storage_class }}
+{% endif %}
+  resources:
+    requests:
+      storage: {{ storage_size }}

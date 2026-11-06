@@ -1,0 +1,42 @@
+---
+- name: Delete MySQL Deployment
+  k8s:
+    state: absent
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: "{{ app_name }}"
+        namespace: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+- name: Delete MySQL service account, service, secret, and PVC
+  k8s:
+    state: absent
+    definition:
+      apiVersion: v1
+      kind: "{{ item.kind }}"
+      metadata:
+        name: "{{ item.name }}"
+        namespace: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  loop:
+    - { kind: Service, name: "{{ app_name }}" }
+    - { kind: Secret, name: "{{ app_name }}" }
+    - { kind: PersistentVolumeClaim, name: "{{ app_name }}-data" }
+    - { kind: ServiceAccount, name: "{{ service_account_name }}" }
+- name: Remove namespace
+  k8s:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    name: "{{ namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: absent
+    wait: true
+    wait_timeout: 600
+  when: not non_admin_user | bool
