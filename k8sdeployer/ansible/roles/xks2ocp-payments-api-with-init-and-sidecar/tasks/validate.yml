@@ -1,0 +1,125 @@
+---
+- name: Wait for payments API pod to be ready
+  k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app={{ app_name }}
+    field_selectors:
+      - status.phase=Running
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: api_pod
+  until: >-
+    api_pod.resources | length == 1 and
+    api_pod.resources[0].status.containerStatuses | length == 2 and
+    (api_pod.resources[0].status.containerStatuses | selectattr('ready') | list | length) == 2
+  retries: 30
+  delay: 10
+
+- name: Assert bootstrap init container completed successfully
+  assert:
+    that:
+      - api_pod.resources[0].status.initContainerStatuses | length == 1
+      - api_pod.resources[0].status.initContainerStatuses[0].state.terminated.exitCode == 0
+    fail_msg: >-
+      Bootstrap init container did not complete successfully for {{ app_name }}:
+      {{ api_pod.resources[0].status.initContainerStatuses | default([]) }}
+
+- name: Get payments API pod name
+  set_fact:
+    api_pod_name: "{{ (api_pod.resources | first).metadata.name }}"
+
+- name: Verify payments API health endpoint
+  kubernetes.core.k8s_exec:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ api_pod_name }}"
+    container: payments-api
+    command: >-
+      python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8080/healthz').read().decode())"
+  register: api_health_result
+  changed_when: false
+
+- name: Assert payments API is healthy
+  assert:
+    that:
+      - api_health_result.rc == 0
+      - api_health_result.stdout | trim == 'ok'
+    fail_msg: >-
+      Expected payments API health endpoint to return ok, but received:
+      {{ api_health_result.stdout | default('') }} {{ api_health_result.stderr | default('') }}
+
+- name: Wait for PostgreSQL pod to be ready
+  k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app={{ database_app_name }}
+    field_selectors:
+      - status.phase=Running
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: database_pod
+  until: >-
+    database_pod.resources | length == 1 and
+    database_pod.resources[0].status.containerStatuses[0].ready | default(false)
+  retries: 30
+  delay: 10
+
+- name: Get PostgreSQL pod name
+  set_fact:
+    database_pod_name: "{{ (database_pod.resources | first).metadata.name }}"
+
+- name: Verify migrated payment data
+  kubernetes.core.k8s_exec:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ database_pod_name }}"
+    container: postgresql
+    command: >-
+      /bin/sh -ec "psql -tA -U \"$POSTGRESQL_USER\" -d \"$POSTGRESQL_DATABASE\"
+      -c \"SELECT count(*) || '|' || md5(string_agg(payment_id || ':' || account_id || ':' || amount_cents || ':' || status,
+      ',' ORDER BY payment_id)) FROM payments WHERE payment_id IN ('payment-1001', 'payment-1002', 'payment-1003');\""
+  register: payments_result
+  changed_when: false
+
+- name: Assert expected payment data exists
+  assert:
+    that:
+      - payments_result.rc == 0
+      - payments_result.stdout | trim == '3|03c7836784fab1689fb8ad489d6c721e'
+    fail_msg: >-
+      Expected three seeded payments in {{ database_app_name }}, but received:
+      {{ payments_result.stdout | default('') }} {{ payments_result.stderr | default('') }}
+
+- name: Verify payment store can write and read data
+  kubernetes.core.k8s_exec:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ database_pod_name }}"
+    container: postgresql
+    command: >-
+      /bin/sh -ec "psql -tA -v ON_ERROR_STOP=1 -U \"$POSTGRESQL_USER\" -d \"$POSTGRESQL_DATABASE\"
+      -c \"WITH upsert AS (INSERT INTO payments (payment_id, account_id, amount_cents, status) VALUES
+      ('payment-validation', 'migration-check', 1, 'validated') ON CONFLICT (payment_id) DO UPDATE SET
+      status = EXCLUDED.status RETURNING status) SELECT status FROM upsert;\""
+  register: write_read_result
+  changed_when: false
+
+- name: Assert payment write and read succeeded
+  assert:
+    that:
+      - write_read_result.rc == 0
+      - write_read_result.stdout | trim == 'validated'
+    fail_msg: >-
+      Expected validation payment status to be validated, but received:
+      {{ write_read_result.stdout | default('') }} {{ write_read_result.stderr | default('') }}

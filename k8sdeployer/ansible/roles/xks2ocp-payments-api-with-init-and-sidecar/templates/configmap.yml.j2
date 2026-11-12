@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+data:
+  payments-api.py: |
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/healthz":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"ok\n")
+                return
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, fmt, *args):
+            # Logging to stdout avoids assuming a fixed fsGroup for emptyDir.
+            print(fmt % args, flush=True)
+
+    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
