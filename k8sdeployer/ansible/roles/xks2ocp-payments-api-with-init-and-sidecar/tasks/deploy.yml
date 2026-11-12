@@ -1,0 +1,123 @@
+---
+- name: Ensure namespace exists
+  k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  when: not non_admin_user | bool
+
+- name: Create payments secret
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'secret.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Create payments API ConfigMap
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'configmap.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Create PostgreSQL service
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'database-service.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Create payments API service
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'service.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Create PostgreSQL StatefulSet
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'database-statefulset.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Wait for PostgreSQL pod to be ready
+  k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app={{ database_app_name }}
+    field_selectors:
+      - status.phase=Running
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: database_pod
+  until: >-
+    database_pod.resources | length == 1 and
+    database_pod.resources[0].status.containerStatuses[0].ready | default(false)
+  retries: 30
+  delay: 10
+
+- name: Get PostgreSQL pod name
+  set_fact:
+    database_pod_name: "{{ (database_pod.resources | first).metadata.name }}"
+
+- name: Seed deterministic payment records
+  kubernetes.core.k8s_exec:
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+    namespace: "{{ namespace }}"
+    pod: "{{ database_pod_name }}"
+    container: postgresql
+    command: >-
+      /bin/sh -ec "psql -v ON_ERROR_STOP=1 -U \"$POSTGRESQL_USER\" -d \"$POSTGRESQL_DATABASE\"
+      -c \"CREATE TABLE IF NOT EXISTS payments (payment_id text PRIMARY KEY, account_id text NOT NULL,
+      amount_cents integer NOT NULL, status text NOT NULL); INSERT INTO payments (payment_id, account_id,
+      amount_cents, status) VALUES ('payment-1001', 'account-a', 1250, 'authorized'), ('payment-1002',
+      'account-b', 4599, 'settled'), ('payment-1003', 'account-a', 799, 'refunded') ON CONFLICT
+      (payment_id) DO UPDATE SET account_id = EXCLUDED.account_id, amount_cents = EXCLUDED.amount_cents,
+      status = EXCLUDED.status;\""
+  register: seed_result
+  retries: 5
+  until: seed_result.rc == 0
+  delay: 5
+
+- name: Create payments API Deployment
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'deployment.yml.j2') | from_yaml }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Wait for payments API pod to be ready
+  k8s_info:
+    kind: Pod
+    namespace: "{{ namespace }}"
+    label_selectors:
+      - app={{ app_name }}
+    field_selectors:
+      - status.phase=Running
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: api_pod
+  until: >-
+    api_pod.resources | length == 1 and
+    api_pod.resources[0].status.containerStatuses | length == 2 and
+    (api_pod.resources[0].status.containerStatuses | selectattr('ready') | list | length) == 2
+  retries: 30
+  delay: 10
