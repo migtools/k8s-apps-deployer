@@ -1,5 +1,29 @@
 ---
-- name: Wait for payments API pod to be ready
+- name: Wait for payments API Deployment rollout to complete
+  k8s_info:
+    kind: Deployment
+    namespace: "{{ namespace }}"
+    name: "{{ app_name }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  register: api_deployment
+  until: >-
+    api_deployment.resources | length == 1 and
+    (api_deployment.resources[0].status.observedGeneration | default(0) | int) ==
+    (api_deployment.resources[0].metadata.generation | int) and
+    (api_deployment.resources[0].status.updatedReplicas | default(0) | int) ==
+    (api_deployment.resources[0].spec.replicas | default(1) | int) and
+    (api_deployment.resources[0].status.readyReplicas | default(0) | int) ==
+    (api_deployment.resources[0].spec.replicas | default(1) | int) and
+    (api_deployment.resources[0].status.availableReplicas | default(0) | int) ==
+    (api_deployment.resources[0].spec.replicas | default(1) | int) and
+    (api_deployment.resources[0].status.replicas | default(0) | int) ==
+    (api_deployment.resources[0].spec.replicas | default(1) | int)
+  retries: 30
+  delay: 10
+
+- name: Get current payments API pod
   k8s_info:
     kind: Pod
     namespace: "{{ namespace }}"
