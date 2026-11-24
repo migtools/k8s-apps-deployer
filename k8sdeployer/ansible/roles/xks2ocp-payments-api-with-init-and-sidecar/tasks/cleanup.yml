@@ -1,0 +1,50 @@
+---
+- name: Delete payments API Deployment
+  k8s:
+    state: absent
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: "{{ app_name }}"
+        namespace: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Delete payments PostgreSQL StatefulSet
+  k8s:
+    state: absent
+    definition:
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: "{{ database_app_name }}"
+        namespace: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+
+- name: Delete payments application resources
+  k8s:
+    state: absent
+    definition:
+      apiVersion: v1
+      kind: "{{ item.kind }}"
+      metadata:
+        name: "{{ item.name }}"
+        namespace: "{{ namespace }}"
+    host: "{{ server }}"
+    api_key: "{{ token }}"
+    verify_ssl: "{{ verify_ssl }}"
+  loop:
+    - kind: Service
+      name: "{{ app_name }}"
+    - kind: Service
+      name: "{{ database_app_name }}"
+    - kind: ConfigMap
+      name: "{{ app_name }}"
+    - kind: Secret
+      name: "{{ app_name }}"
+    - kind: PersistentVolumeClaim
+      name: "data-{{ database_app_name }}-0"

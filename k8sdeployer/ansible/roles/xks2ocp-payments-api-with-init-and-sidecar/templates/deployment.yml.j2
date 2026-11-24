@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ app_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ app_name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ app_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ app_name }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: bootstrap-payments-api
+          image: {{ api_image }}
+          command:
+            - python
+            - -c
+            - "from pathlib import Path; assert Path('/opt/payments/payments-api.py').stat().st_size > 0"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: api-code
+              mountPath: /opt/payments
+              readOnly: true
+            - name: runtime-data
+              mountPath: /var/run/payments
+      containers:
+        - name: payments-api
+          image: {{ api_image }}
+          command:
+            - python
+            - /opt/payments/payments-api.py
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: api-code
+              mountPath: /opt/payments
+              readOnly: true
+            - name: runtime-data
+              mountPath: /var/run/payments
+        - name: payment-log-sidecar
+          image: {{ api_image }}
+          command:
+            - python
+            - -c
+            - "from pathlib import Path; import time; assert Path('/var/run/payments').is_dir(); time.sleep(2147483647)"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: runtime-data
+              mountPath: /var/run/payments
+      volumes:
+        - name: api-code
+          configMap:
+            name: {{ app_name }}
+        - name: runtime-data
+          emptyDir: {}

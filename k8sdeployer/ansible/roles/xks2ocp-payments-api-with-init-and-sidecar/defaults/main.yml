@@ -1,0 +1,18 @@
+---
+app_name: xks2ocp-payments-api
+database_app_name: xks2ocp-payments-postgresql
+database_name: payments
+database_user: payments
+database_password: payments-test-password
+postgres_image: quay.io/sclorg/postgresql-16-c9s:20261104
+api_image: registry.access.redhat.com/ubi9/python-311:latest
+storage_size: 2Gi
+storage_class: ""
+access_mode: ReadWriteOnce
+
+# Set this value to true if using a non cluster-admin user.
+non_admin_user: false
+
+with_cleanup: false
+with_deploy: false
+with_validate: false
